@@ -61,6 +61,11 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
+// ─── Test WebApp page (diagnose 404) ──────────────────────────────
+app.get('/app', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WINK Test</title><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body style="background:#0f0f15;color:#fff;font-family:sans-serif;padding:20px"><h1>✅ WINK Test Page</h1><p>If you see this, the WebApp URL works!</p><p id="status">Checking Telegram initData...</p><script>const tg=window.Telegram?.WebApp;document.getElementById('status').textContent=tg?.initData?'✅ initData available':'❌ No initData';if(tg)tg.ready();</script></body></html>`);
+});
+
 // ─── Debug ────────────────────────────────────────────────────────
 app.get('/debug', (req, res) => {
   res.json({
