@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>WINK — Profile</title>
+  <link rel="stylesheet" href="shared.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="auth.js"></script>
+  <style>
+    body { background: var(--tg-bg, #0f0f15); color: var(--tg-text-color, #fff); font-family: -apple-system, system-ui, sans-serif; margin: 0; }
+    .container { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
+
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 0;
+    }
+    .profile-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #ff4d8d;
+    }
+    .profile-info h1 { margin: 0; font-size: 22px; }
+    .profile-info .muted { color: var(--tg-hint-color, #888); font-size: 14px; margin-top: 4px; }
+    .verified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #22c55e;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .verified-badge.pending { background: #f59e0b; }
+
+    .card {
+      background: var(--tg-section-bg, #1a1a24);
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--tg-hint-color, #888); text-transform: uppercase; letter-spacing: .05em; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--tg-hint-color, #666); margin-bottom: 6px; }
+    .field .value { font-size: 15px; }
+    .field input, .field select, .field textarea {
+      display: block; width: 100%;
+      background: var(--tg-secondary-bg, #252532);
+      border: 1px solid var(--tg-border-color, #333);
+      color: var(--tg-text-color, #fff);
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: #ff4d8d; }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--tg-secondary-bg, #252532);
+      border: 1px solid var(--tg-border-color, #333);
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chip.active { background: linear-gradient(135deg, #ff4d8d, #ff8a65); color: #fff; border: none; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary { background: linear-gradient(135deg, #ff4d8d, #ff8a65); color: white; }
+    .btn-secondary { background: var(--tg-secondary-bg, #252532); color: var(--tg-text-color, #fff); }
+    .btn-danger { background: #ef4444; color: white; }
+
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .stat-box { background: var(--tg-secondary-bg, #252532); border-radius: 12px; padding: 16px; text-align: center; }
+    .stat-box .num { font-size: 28px; font-weight: 700; color: #ff4d8d; }
+    .stat-box .label { font-size: 12px; color: var(--tg-hint-color, #888); margin-top: 4px; }
+
+    .referral-code {
+      background: var(--tg-secondary-bg, #252532);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      word-break: break-all;
+      color: #ff4d8d;
+      margin-top: 8px;
+    }
+
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #333; color: white; padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="profile-header">
+      <img id="avatar" class="profile-avatar" src="" alt="">
+      <div class="profile-info">
+        <h1 id="displayName">Loading...</h1>
+        <p class="muted" id="locationDisplay"></p>
+        <div id="verifyBadge"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Stats</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="num" id="matchesUsed">0</div>
+          <div class="label">Matches Used</div>
+        </div>
+        <div class="stat-box">
+          <div class="num" id="textsRemaining">5</div>
+          <div class="label">Texts Left</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📝 Profile</h2>
+
+      <div class="field">
+        <label>Name</label>
+        <input id="f_firstName" type="text" placeholder="Your name">
+      </div>
+
+      <div class="field">
+        <label>Age</label>
+        <input id="f_age" type="number" min="18" max="120" placeholder="18-120">
+      </div>
+
+      <div class="field">
+        <label>Country</label>
+        <input id="f_country" type="text" placeholder="e.g. India">
+      </div>
+
+      <div class="field">
+        <label>City</label>
+        <input id="f_city" type="text" placeholder="e.g. Mumbai">
+      </div>
+
+      <div class="field">
+        <label>Gender</label>
+        <div class="chip-row" id="genderChips">
+          <div class="chip" data-val="male">♂️ Male</div>
+          <div class="chip" data-val="female">♀️ Female</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Interested in</label>
+        <div class="chip-row" id="seekingChips">
+          <div class="chip" data-val="male">♂️ Males</div>
+          <div class="chip" data-val="female">♀️ Females</div>
+          <div class="chip" data-val="both">⚧️ Both</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Bio</label>
+        <textarea id="f_bio" rows="3" maxlength="300" placeholder="Tell about yourself..."></textarea>
+      </div>
+
+      <div class="field">
+        <label>Photo URL (paste from Telegram)</label>
+        <input id="f_photo" type="text" placeholder="https://api.telegram.org/file/bot...">
+      </div>
+
+      <button class="btn btn-primary" style="width:100%; margin-top:8px" onclick="saveProfile()">💾 Save Profile</button>
+    </div>
+
+    <div class="card">
+      <h2>🎫 Referral Code</h2>
+      <p style="font-size:13px; color:var(--tg-hint-color,#888); margin:0 0 8px;">
+        Share this link. When a friend completes profile + photo, you both earn <b>5 free texts</b>!
+      </p>
+      <div class="referral-code" id="referralCode">Loading...</div>
+      <button class="btn btn-secondary" style="width:100%; margin-top:10px" onclick="copyReferral()">📋 Copy Link</button>
+    </div>
+
+    <div class="card">
+      <h2>⚙️</h2>
+      <button class="btn btn-secondary" style="width:100%" onclick="window.Telegram?.WebApp?.close?.()">🚪 Close</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="nav.js"></script>
+  <script>
+    let profile = null;
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast' + (isError ? ' error' : '');
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function defaultAvatar() {
+      return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="60" fill="%23ff4d8d"/></svg>';
+    }
+
+    async function init() {
+      try {
+        await window.__tgAuth.waitForInitData(8000);
+        const headers = window.__tgAuth.getAuthHeaders();
+        const res = await fetch(location.origin + '/api/profile', { headers });
+        if (!res.ok) { alert('Could not load profile'); return; }
+        profile = await res.json();
+
+        // Populate fields
+        document.getElementById('avatar').src = profile.photoUrl || defaultAvatar();
+        document.getElementById('displayName').textContent = (profile.firstName || 'User') + (profile.lastName ? ' ' + profile.lastName : '');
+        document.getElementById('locationDisplay').textContent = [profile.city, profile.country].filter(Boolean).join(', ') || 'Set your location';
+
+        document.getElementById('f_firstName').value = profile.firstName || '';
+        document.getElementById('f_age').value = profile.age || '';
+        document.getElementById('f_country').value = profile.country || '';
+        document.getElementById('f_city').value = profile.city || '';
+        document.getElementById('f_bio').value = profile.bio || '';
+        document.getElementById('f_photo').value = profile.photoUrl || '';
+
+        // Stats
+        document.getElementById('matchesUsed').textContent = profile.matchesUsed || 0;
+        document.getElementById('textsRemaining').textContent = profile.textsRemaining || 0;
+
+        // Verify badge
+        const vb = document.getElementById('verifyBadge');
+        if (profile.isVerified) {
+          vb.innerHTML = '<span class="verified-badge">✅ Verified</span>';
+        } else {
+          vb.innerHTML = '<span class="verified-badge pending">❌ Not Verified</span>';
+        }
+
+        // Gender chips
+        const gender = (profile.gender || '').toLowerCase();
+        document.querySelectorAll('#genderChips .chip').forEach(c => {
+          c.classList.toggle('active', c.dataset.val === gender);
+          c.onclick = () => selectChip('gender', c.dataset.val);
+        });
+
+        // Seeking chips
+        const seeking = (profile.seeking || '').toLowerCase();
+        document.querySelectorAll('#seekingChips .chip').forEach(c => {
+          c.classList.toggle('active', c.dataset.val === seeking);
+          c.onclick = () => selectChip('seeking', c.dataset.val);
+        });
+
+        // Load referral
+        loadReferral();
+
+      } catch (e) {
+        console.error(e);
+        showToast('Error loading profile', true);
+      }
+    }
+
+    let selectedGender = '';
+    let selectedSeeking = '';
+
+    function selectChip(type, val) {
+      if (type === 'gender') {
+        selectedGender = val;
+        document.querySelectorAll('#genderChips .chip').forEach(c => c.classList.toggle('active', c.dataset.val === val));
+      } else {
+        selectedSeeking = val;
+        document.querySelectorAll('#seekingChips .chip').forEach(c => c.classList.toggle('active', c.dataset.val === val));
+      }
+    }
+
+    async function saveProfile() {
+      if (!profile) return;
+      const age = parseInt(document.getElementById('f_age').value);
+      if (isNaN(age) || age < 18 || age > 120) { showToast('Age must be 18-120', true); return; }
+
+      const payload = {
+        firstName: document.getElementById('f_firstName').value.trim(),
+        age: age,
+        country: document.getElementById('f_country').value.trim(),
+        city: document.getElementById('f_city').value.trim(),
+        gender: selectedGender || undefined,
+        seeking: selectedSeeking || undefined,
+        bio: document.getElementById('f_bio').value.trim()
+      };
+
+      try {
+        const res = await fetch(location.origin + '/api/profile/' + profile.chatId, {
+          method: 'PUT',
+          headers: { ...window.__tgAuth.getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Save failed');
+
+        // Save photo if changed
+        const newPhoto = document.getElementById('f_photo').value.trim();
+        if (newPhoto && newPhoto !== profile.photoUrl) {
+          await fetch(location.origin + '/api/profile/' + profile.chatId + '/photo', {
+            method: 'POST',
+            headers: { ...window.__tgAuth.getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photoUrl: newPhoto })
+          });
+        }
+
+        showToast('✅ Profile saved!');
+        setTimeout(() => window.Telegram?.WebApp?.close?.(), 1000);
+      } catch (e) {
+        showToast('Save failed: ' + e.message, true);
+      }
+    }
+
+    async function loadReferral() {
+      try {
+        const res = await fetch(location.origin + '/api/referral/generate', {
+          method: 'POST',
+          headers: { ...window.__tgAuth.getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: profile?.chatId })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('referralCode').textContent = data.referralLink || 'Not available';
+        }
+      } catch (e) {}
+    }
+
+    function copyReferral() {
+      const text = document.getElementById('referralCode').textContent;
+      if (text && !text.includes('Not available')) {
+        navigator.clipboard?.writeText(text).then(() => showToast('Copied!'));
+      }
+    }
+
+    injectBottomNav('profile');
+    init();
+  </script>
+</body>
+</html>

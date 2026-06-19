@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Telegram Dating Bot — Process Flow</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1116;
+    --fg: #d9e0ec;
+    --accent: #5ea1ff;
+    --muted: #6c7a91;
+    --panel: #151b23;
+    --border: #1e2530;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --fg: #1e2530;
+      --accent: #2563eb;
+      --muted: #5a6b7e;
+      --panel: #ffffff;
+      --border: #e1e7ef;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { color: var(--accent); border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+  h2 { color: var(--accent); margin-top: 48px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 16px 0 32px;
+    overflow-x: auto;
+  }
+  .panel pre.mermaid { margin: 0; }
+  table { border-collapse: collapse; margin: 16px 0; }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 14px;
+  }
+  th { background: var(--accent); color: white; }
+  .legend { font-size: 14px; color: var(--muted); margin: 8px 0 24px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>💕 Telegram Dating Bot — Process Flow</h1>
+  <p class="legend">Bot server root: <code>C:\Users\suraj\dating-bot</code>. SQLite DB. All endpoints live at port 3000.</p>
+
+  <h2>1. End-to-end sequence (onboarding → match → chat → paywall)</h2>
+  <div class="panel">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User as 👤 User (Telegram app)
+    participant TG as 📱 Telegram Bot API
+    participant EX as 🖥️ Express server.js :3000
+    participant LLM as 🤖 Face Verify LLM<br/>(Colab DeepSeek tunnel)
+    participant DB as 🗄️ SQLite (dating_bot.db)
+    participant PAY as 💳 PayPal<br/>(stubbed in dev)
+
+    rect rgb(240, 248, 255)
+    Note over User,DB: PHASE 1 — Onboarding (questions disappear as answered)
+    User->>TG: /start
+    TG->>EX: webhook POST /webhook {message}
+    EX->>DB: SELECT * FROM users WHERE chat_id=?
+    DB-->>EX: NULL (new user)
+    EX->>TG: sendMessage "Welcome! Click to set up"
+    TG-->>User: "Click ➕ Start Profile Setup"
+    User->>TG: taps ➕ (callback_data=setup_profile)
+    TG->>EX: webhook callback_query
+    EX->>TG: "What's your name?"
+    TG-->>User: input prompt
+    User->>TG: "Suraj"
+    User->>TG: "28"
+    User->>TG: "Bengaluru"
+    User->>TG: "India"
+    User->>TG: "Male"
+    User->>TG: "Female"
+    EX->>DB: INSERT/UPDATE users (chat_id, age, gender, seeking, city, country)
+    end
+
+    rect rgb(255, 248, 240)
+    Note over User,LLM: PHASE 2 — Photo + Face verify
+    EX->>TG: "Upload your photo"
+    User->>TG: sends photo
+    TG->>EX: webhook {photo}
+    EX->>DB: UPDATE users SET photo_url=...
+    EX->>LLM: POST /verify (reference vs uploaded)
+    alt Real LLM path
+        LLM-->>EX: {isMatch:true, similarity:0.82, confidence:0.82}
+    else Stub path (dev fallback)
+        EX-->>EX: pseudo-features from URL hash → auto-verify
+    end
+    EX->>DB: UPDATE users SET is_verified=1 WHERE chat_id=?
+    EX->>TG: "✅ Verified! Tap Start Matching"
+    end
+
+    rect rgb(240, 255, 240)
+    Note over User,DB: PHASE 3 — Match
+    User->>TG: taps 💕 Start Matching
+    TG->>EX: callback_query {find_matches}
+    EX->>DB: SELECT * FROM users WHERE gender='female' AND age<28 AND is_verified=1 AND chat_id NOT IN (...matched) ORDER BY RANDOM() LIMIT 1
+    DB-->>EX: {chat_id:5, Eve, 26, Chicago}
+    EX->>DB: INSERT INTO matches (user1_id, user2_id, status='active')
+    EX->>TG: sendPhoto Eve + "Open Chat" inline button
+    end
+
+    rect rgb(248, 240, 255)
+    Note over User,DB: PHASE 4 — Chat (text-limit wall)
+    User->>TG: taps 💬 Open Chat (WebApp)
+    EX->>DB: SELECT texts_used, is_premium
+    alt free user + texts_used<10
+        EX->>DB: INSERT message; UPDATE texts_used+=1
+        EX->>DB: INSERT notification for receiver
+        EX-->>User: {success:true, textsRemaining:9}
+    else first 10 used up
+        EX-->>User: 403 {needsPremium:true}
+    end
+    EX->>TG: sendMessage receiver: "You have a message from X"
+    end
+
+    rect rgb(255, 240, 240)
+    Note over User,PAY: PHASE 5 — Freemium gate
+    User->>EX: POST /api/premium/subscribe
+    EX->>PAY: sandbox order (TODO)
+    PAY-->>EX: approval (TODO)
+    EX->>DB: UPDATE users SET is_premium=1
+    opt Referral alternative
+        User->>EX: POST /api/referral/generate
+        EX-->>User: t.me/BotName?start=ref_REFxxx
+    end
+    end
+</pre>
+  </div>
+
+  <h2>2. Component lifecycle (Express + db_adapter + SQLite)</h2>
+  <div class="panel">
+<pre class="mermaid">
+sequenceDiagram
+    participant EX as Express server.js
+    participant DB as db_adapter (SQLite|PG)
+    participant SQL as better-sqlite3
+    Note over EX,SQL: Boot
+    EX->>DB: initializeDatabase()
+    DB->>SQL: new Database('./dating_bot.db')<br/>(only unlink if RESET_DB=1)
+    SQL-->>DB: open handle
+    DB->>SQL: CREATE TABLE IF NOT EXISTS ...
+    EX->>EX: app.listen(3000)
+    Note over DB,SQL: Each request
+    EX->>DB: query(sql, params)
+    DB->>DB: convert $N → ? (positional)<br/>map each ? to params[N-1]
+    DB->>SQL: stmt.all(...orderedParams)
+    SQL-->>DB: rows
+    DB-->>EX: rows
+</pre>
+  </div>
+
+  <h2>3. User lifecycle state machine</h2>
+  <div class="panel">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> new_user : /start
+    new_user --> onboarding : tap ➕ setup_profile
+    onboarding : profile fields answered ONE-BY-ONE
+    onboarding --> photo_prompt : all 6 fields set
+    photo_prompt --> face_verify : photo received
+    face_verify --> verified : isMatch=true
+    face_verify --> photo_prompt : rejected
+    verified --> ready_to_match : show 💕 Start Matching
+    ready_to_match --> matching : tap 💕
+    matching --> matched : pair found
+    matching --> ready_to_match : none found
+    matched --> chatting : user texts
+    chatting --> chatting : normal msg (texts_used += 1)
+    chatting --> paywall : texts_used >= 10
+    paywall --> chatting : referral success (-10 used)
+    paywall --> premium : PayPal checkout
+    premium --> chatting : unlimited again
+    note right of chatting : Female users bypass paywall
+    note right of paywall : -10 only when referred friend buys premium
+</pre>
+  </div>
+
+  <h2>4. State ↔ DB column mapping</h2>
+  <table>
+    <tr><th>State</th><th>DB columns</th><th>API entry</th></tr>
+    <tr><td>new_user</td><td>users.chat_id MISSING</td><td>POST /api/auth/register</td></tr>
+    <tr><td>onboarding</td><td>age/gender/seeking/city/country = partial</td><td>PUT /api/profile/:chat_id</td></tr>
+    <tr><td>verified</td><td>is_verified = 1</td><td>POST /api/profile/:chatId/verify-face</td></tr>
+    <tr><td>matched</td><td>matches.status = 'active'</td><td>POST /api/matching/find</td></tr>
+    <tr><td>chatting</td><td>messages rows present</td><td>POST /api/messages/send</td></tr>
+    <tr><td>paywall</td><td>texts_used >= 10</td><td>—</td></tr>
+    <tr><td>premium</td><td>is_premium = 1</td><td>POST /api/premium/subscribe</td></tr>
+  </table>
+
+  <h2>5. Female fast-path + Referral reward</h2>
+  <div class="panel">
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> female_onboard : /start, gender=female
+    female_onboard --> premium : if gender=female AND verified → auto is_premium=1, expiry=null
+    premium : bypasses paywall forever
+
+    state "Referrer (10/10 used)" as R2
+    state "Referee user" as R1
+    state "Referee buys premium" as R3
+    R1 --> R3
+    R3 --> R2 : claim-reward → texts_used -= 10
+</pre>
+  </div>
+
+  <p class="legend">Generated 2026-06-17 · server.js PID alive on port 3000 · SQLite · real curl-verified endpoints</p>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+  securityLevel: 'loose',
+  sequence: { useMaxWidth: true, diagramMarginX: 8, diagramMarginY: 8 },
+  flowchart: { useMaxWidth: true }
+});
+</script>
+</body>
+</html>

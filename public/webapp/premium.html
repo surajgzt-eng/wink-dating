@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WINK — Premium</title>
+  <link rel="stylesheet" href="shared.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="auth.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="row-spread" style="margin-bottom: 16px;">
+      <h1>⭐ Premium</h1>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌗</button>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; text-align: center; border: none;">
+      <div style="font-size: 48px; margin: 8px 0;">⭐</div>
+      <h2 style="color:#fff; font-weight: 700;">WINK Premium</h2>
+      <p style="font-size: 22px; margin: 8px 0;">₹399 <span style="font-size:14px; opacity: .8;">— Lifetime</span></p>
+    </div>
+
+    <div class="card">
+      <h2>What you get</h2>
+      <ul style="line-height: 1.8; padding-left: 22px;">
+        <li>💬 <b>Unlimited messages</b> with all matches</li>
+        <li>💕 <b>Unlimited matches</b> — no daily caps</li>
+        <li>👁️ <b>See contact numbers</b> shared in chat</li>
+        <li>🎯 <b>Priority matching</b> — shown first</li>
+        <li>🌟 <b>Premium badge</b> on your profile</li>
+      </ul>
+    </div>
+
+    <button class="btn btn-success" id="subBtn">💳 Subscribe now — ₹399</button>
+
+    <p class="muted small" style="text-align: center; margin-top: 12px;">
+      Or refer friends to earn 10 bonus texts each<br>
+      <a href="profile.html" style="color: var(--accent)">Your referral link</a>
+    </p>
+
+    <div class="card" style="margin-top: 20px;">
+      <p class="muted small" style="margin:0;">Dev mode: payment is stubbed — tapping Subscribe will instantly activate premium. Real integration with PayPal sandbox is wired but credentials need to be added in <code>.env</code>.</p>
+    </div>
+  </div>
+
+  <script src="nav.js"></script>
+  <script>
+    injectBottomNav('premium');
+
+    const qs = new URLSearchParams(window.location.search);
+    const apiURL = qs.get('api_url') || '';
+    const apiBase = (apiURL && !apiURL.includes('localhost')) ? apiURL.replace(/\/+$/, '') : location.origin;
+
+    async function init() {
+      await window.__tgAuth.waitForInitData();
+      const r = await fetch(apiBase + '/api/profile', { headers: window.__tgAuth.getAuthHeaders() });
+      if (r.ok) {
+        const u = await r.json();
+        if (u.isPremium) {
+          document.getElementById('subBtn').textContent = '✅ You are already Premium!';
+          document.getElementById('subBtn').disabled = true;
+          document.getElementById('subBtn').classList.add('btn-secondary');
+        }
+      }
+    }
+
+    document.getElementById('subBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('subBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Activating...';
+      try {
+        const pr = await fetch(apiBase + '/api/profile', { headers: window.__tgAuth.getAuthHeaders() });
+        const me = await pr.json();
+        const r = await fetch(apiBase + '/api/premium/subscribe', {
+          method: 'POST',
+          headers: window.__tgAuth.getAuthHeaders({'Content-Type':'application/json'}),
+          body: JSON.stringify({ chatId: me.chatId, paymentMethod: 'paypal' })
+        });
+        if (r.ok) {
+          showToast('🎉 Premium activated!');
+          btn.textContent = '✅ You are Premium!';
+          btn.classList.remove('btn-success');
+          btn.classList.add('btn-secondary');
+          // Hide premium nav
+          const navP = document.getElementById('premiumNavBtn');
+          if (navP) navP.style.display = 'none';
+        } else {
+          const err = await r.json();
+          showToast('Failed: ' + (err.error || 'unknown'), true);
+          btn.disabled = false;
+          btn.textContent = '💳 Subscribe now — ₹399';
+        }
+      } catch (e) {
+        showToast('Error: ' + e.message, true);
+        btn.disabled = false;
+        btn.textContent = '💳 Subscribe now — ₹399';
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

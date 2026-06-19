@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>WINK — Chats</title>
+  <link rel="stylesheet" href="shared.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { background: var(--tg-bg, #0f0f15); color: var(--tg-text-color, #fff); font-family: -apple-system, system-ui, sans-serif; margin: 0; }
+    .container { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 100px; }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+    }
+    .page-header h1 { margin: 0; font-size: 24px; }
+
+    .chat-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .chat-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px;
+      background: var(--tg-section-bg, #1a1a24);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .chat-item:active { background: var(--tg-secondary-bg, #252532); }
+    .chat-item img {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #ff4d8d;
+    }
+    .chat-item .info { flex: 1; }
+    .chat-item .name { font-weight: 600; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+    .chat-item .name .premium { font-size: 12px; }
+    .chat-item .sub { font-size: 13px; color: var(--tg-hint-color, #888); margin-top: 3px; }
+    .chat-item .arrow { color: var(--tg-hint-color, #555); font-size: 18px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--tg-hint-color, #888);
+    }
+    .empty-state .icon { font-size: 56px; margin-bottom: 16px; }
+    .empty-state h2 { margin: 0 0 8px; font-size: 20px; color: #fff; }
+    .empty-state p { margin: 0 0 20px; }
+    .empty-state .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #ff4d8d, #ff8a65);
+      color: white;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: #333; color: white; padding: 12px 20px; border-radius: 10px;
+      font-size: 14px; z-index: 1000; opacity: 0; transition: opacity 0.3s;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="page-header">
+      <h1>💬 Chats</h1>
+    </div>
+
+    <div id="list" class="chat-list"></div>
+    <div id="empty" class="empty-state" style="display:none;">
+      <div class="icon">💬</div>
+      <h2>No matches yet</h2>
+      <p>Open the bot to find and match with people!</p>
+      <a href="https://t.me/wink_dating_bot" class="btn">💕 Find Matches</a>
+    </div>
+  </div>
+
+  <script src="nav.js"></script>
+  <script>
+    function showToast(msg, isError = false) {
+      const t = document.createElement('div');
+      t.className = 'toast' + (isError ? ' error' : '');
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.classList.add('show'), 10);
+      setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+    }
+
+    function defaultAvatar() {
+      return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="60" fill="%23ff4d8d"/></svg>';
+    }
+
+    async function init() {
+      try {
+        await window.__tgAuth.waitForInitData(5000);
+        const headers = window.__tgAuth.getAuthHeaders();
+        const pr = await fetch(location.origin + '/api/profile', { headers });
+        const me = await pr.json();
+
+        const r = await fetch(location.origin + `/api/matches/${me.chatId}`, { headers });
+        const data = await r.json();
+
+        const list = document.getElementById('list');
+
+        if (!data.matches?.length) {
+          document.getElementById('empty').style.display = 'block';
+          return;
+        }
+
+        for (const m of data.matches) {
+          const card = document.createElement('a');
+          card.className = 'chat-item';
+          card.href = `chat.html?matchId=${m.id}&name=${encodeURIComponent(m.first_name || 'Match')}`;
+
+          const ageCity = [m.age ? m.age + 'y' : '', m.city].filter(Boolean).join(' · ');
+
+          card.innerHTML = `
+            <img src="${m.photo_url || defaultAvatar()}" alt="${m.first_name}" onerror="this.src='${defaultAvatar()}'">
+            <div class="info">
+              <div class="name">
+                ${m.first_name || 'Match'}
+                ${m.is_premium ? '<span class="premium">⭐</span>' : ''}
+              </div>
+              <div class="sub">${ageCity || 'No location set'}</div>
+            </div>
+            <span class="arrow">→</span>
+          `;
+
+          list.appendChild(card);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Failed to load chats', true);
+      }
+    }
+
+    injectBottomNav('chats');
+    init();
+  </script>
+</body>
+</html>

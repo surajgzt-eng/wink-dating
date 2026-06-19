@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WINK — Matches</title>
+  <link rel="stylesheet" href="shared.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="auth.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="row-spread" style="margin-bottom: 16px;">
+      <h1>💕 WINK</h1>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌗</button>
+    </div>
+
+    <div class="card" id="hero">
+      <h2>Ready to find your match?</h2>
+      <p class="muted">Tap below to get matched with someone who fits your preferences.</p>
+      <button class="btn" id="findBtn">💕 Find Me a Match</button>
+    </div>
+
+    <div id="resultCard" class="card" style="display:none">
+      <img id="matchPhoto" class="avatar-lg" src="" alt="">
+      <div style="display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+        <h2 id="matchName" style="margin:0; color:var(--fg); font-weight: 600;"></h2>
+        <span class="badge" id="matchAge"></span>
+        <span class="badge premium" id="matchPremium" style="display:none">⭐ Premium</span>
+      </div>
+      <p class="muted" id="matchLocation"></p>
+      <p id="matchBio" style="font-style: italic; color: var(--fg-muted)"></p>
+      <div style="display:flex; gap: 8px; margin-top: 12px;">
+        <button class="btn" id="openChatBtn">💬 Open Chat</button>
+        <button class="btn btn-secondary" id="nextBtn">❌ Next Match</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Your stats</h2>
+      <div class="row-spread"><span>Free texts left</span><span id="textsLeft" class="badge">—</span></div>
+      <div class="row-spread" style="margin-top: 8px;"><span>Status</span><span id="verifyBadge" class="badge">—</span></div>
+    </div>
+  </div>
+
+  <script src="nav.js"></script>
+  <script>
+    injectBottomNav('find-match');
+
+    const qs = new URLSearchParams(window.location.search);
+    const apiURL = qs.get('api_url') || '';
+    const apiBase = (apiURL && !apiURL.includes('localhost')) ? apiURL.replace(/\/+$/, '') : location.origin;
+
+    async function init() {
+      await window.__tgAuth.waitForInitData();
+      window.__tgAuth.persistInitData();
+      await Promise.all([loadProfileStats(), loadTexts()]);
+    }
+
+    async function loadProfileStats() {
+      try {
+        const r = await fetch(apiBase + '/api/profile', {
+          headers: window.__tgAuth.getAuthHeaders()
+        });
+        if (!r.ok) return;
+        const u = await r.json();
+        const vb = document.getElementById('verifyBadge');
+        vb.innerHTML = (u.isVerified ? '<span class="badge verified">✅ Verified</span>' : '<span class="badge">⚠ Not verified</span>');
+        if (u.isVerified) {
+          document.getElementById('hero').style.display = 'none';
+          showToast(`Welcome back, ${u.firstName}!`, false);
+        }
+      } catch (e) {}
+    }
+
+    async function loadTexts() {
+      try {
+        const r = await fetch(apiBase + '/api/profile', {
+          headers: window.__tgAuth.getAuthHeaders()
+        });
+        if (!r.ok) return;
+        const u = await r.json();
+        const el = document.getElementById('textsLeft');
+        el.textContent = u.isPremium ? '∞ (Premium)' : Math.max(0, 10 - (u.textsUsed || 0));
+        if (u.isPremium) el.classList.add('premium');
+      } catch (e) {}
+    }
+
+    async function findMatch() {
+      const btn = document.getElementById('findBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Searching...';
+      try {
+        const r = await fetch(apiBase + '/api/matching/find', {
+          method: 'POST',
+          headers: window.__tgAuth.getAuthHeaders({'Content-Type':'application/json'}),
+          body: JSON.stringify({})
+        });
+        const data = await r.json();
+        btn.disabled = false;
+        btn.textContent = '💕 Find Me a Match';
+        if (!data.success || !data.match) {
+          showToast('No matches right now. Try again later!', true);
+          return;
+        }
+        const m = data.match;
+        document.getElementById('hero').style.display = 'none';
+        const card = document.getElementById('resultCard');
+        card.style.display = 'block';
+        document.getElementById('matchPhoto').src = m.photoUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="60" fill="%23ff4d8d"/></svg>';
+        document.getElementById('matchName').textContent = `${m.firstName}${m.lastName ? ' ' + m.lastName : ''}`;
+        document.getElementById('matchAge').textContent = m.age + 'y';
+        document.getElementById('matchLocation').textContent = `${m.city || ''}${m.country ? ', ' + m.country : ''}`;
+        document.getElementById('matchBio').textContent = m.bio || '"No bio yet"';
+        document.getElementById('matchPremium').style.display = m.isPremium ? 'inline-block' : 'none';
+        document.getElementById('openChatBtn').onclick = () => {
+          const link = `chat.html?matchId=${m.chatId}&name=${encodeURIComponent(m.firstName)}${apiURL ? '&api_url=' + encodeURIComponent(apiURL) : ''}`;
+          window.location.href = link;
+        };
+        document.getElementById('nextBtn').onclick = findMatch;
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = '💕 Find Me a Match';
+        showToast('Could not search right now: ' + err.message, true);
+      }
+    }
+
+    document.getElementById('findBtn').addEventListener('click', findMatch);
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>WINK Dating</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    body {
+      background: var(--tg-bg, #0f0f15);
+      color: var(--tg-text-color, #fff);
+      font-family: -apple-system, system-ui, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 20px;
+      padding-bottom: 100px;
+    }
+    .header {
+      text-align: center;
+      padding: 40px 0 30px;
+    }
+    .header h1 {
+      font-size: 32px;
+      margin: 0 0 8px;
+      background: linear-gradient(135deg, #ff4d8d, #ff8a65);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header p {
+      color: var(--tg-hint-color, #888);
+      margin: 0;
+    }
+    .menu-card {
+      background: var(--tg-section-bg, #1a1a24);
+      border-radius: 16px;
+      padding: 8px;
+      margin-bottom: 16px;
+    }
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .menu-item:hover, .menu-item:active {
+      background: var(--tg-secondary-bg, #252532);
+    }
+    .menu-item .icon {
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--tg-bg, #0f0f15);
+      border-radius: 12px;
+    }
+    .menu-item .text {
+      flex: 1;
+    }
+    .menu-item .title {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .menu-item .subtitle {
+      font-size: 13px;
+      color: var(--tg-hint-color, #888);
+      margin-top: 2px;
+    }
+    .menu-item .arrow {
+      color: var(--tg-hint-color, #555);
+      font-size: 18px;
+    }
+    .bot-link {
+      display: block;
+      text-align: center;
+      margin-top: 30px;
+      padding: 14px;
+      background: linear-gradient(135deg, #ff4d8d, #ff8a65);
+      color: white;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .bot-link:active {
+      opacity: 0.9;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      background: var(--tg-section-bg, #1a1a24);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #ff4d8d;
+    }
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--tg-hint-color, #888);
+      margin-top: 4px;
+    }
+    .verified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #22c55e;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .verified-badge.pending {
+      background: #f59e0b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>WINK 💕</h1>
+      <p>Telegram Dating</p>
+    </div>
+
+    <div class="stats" id="stats" style="display:none;">
+      <div class="stat-card">
+        <div class="value" id="matchesUsed">0</div>
+        <div class="label">Matches Used</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" id="textsRemaining">5</div>
+        <div class="label">Texts Left</div>
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <a href="#" class="menu-item" id="findMatchBtn">
+        <span class="icon">💕</span>
+        <span class="text">
+          <span class="title">Find Matches</span>
+          <span class="subtitle">Open Telegram to find people</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="menu-card">
+      <a href="chats.html" class="menu-item">
+        <span class="icon">💬</span>
+        <span class="text">
+          <span class="title">My Chats</span>
+          <span class="subtitle">View your conversations</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <div class="menu-card">
+      <a href="profile.html" class="menu-item">
+        <span class="icon">👤</span>
+        <span class="text">
+          <span class="title">My Profile</span>
+          <span class="subtitle" id="profileStatus">View and edit your profile</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+
+    <a href="https://t.me/wink_dating_bot" target="_blank" class="bot-link" id="openBotBtn">
+      💕 Open WINK on Telegram
+    </a>
+  </div>
+
+  <script src="nav.js"></script>
+  <script>
+    (async function() {
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
+      injectBottomNav('home');
+
+      // Load user data
+      try {
+        const user = await api('/api/profile');
+        if (user.chatId) {
+          document.getElementById('stats').style.display = 'grid';
+          document.getElementById('matchesUsed').textContent = user.matchesUsed || 0;
+          document.getElementById('textsRemaining').textContent = user.textsRemaining || 0;
+
+          const status = document.getElementById('profileStatus');
+          if (user.isVerified) {
+            status.innerHTML = '<span class="verified-badge">✅ Verified</span>';
+          } else {
+            status.innerHTML = '<span class="verified-badge pending">❌ Not Verified</span>';
+          }
+        }
+      } catch (e) {
+        console.log('Could not load user data');
+      }
+    })();
+  </script>
+</body>
+</html>
