@@ -6,7 +6,7 @@ function injectBottomNav(activePage) {
   const nav = document.createElement('div');
   nav.className = 'bottom-nav';
   nav.innerHTML = `
-    <a href="index.html?s=find" class="${activePage==='find'?'active':''}">
+    <a href="find-match.html" class="${activePage==='find'?'active':''}">
       <span class="nav-icon">💕</span><span class="nav-label">Find</span>
     </a>
     <a href="chats.html" class="${activePage==='chats'?'active':''}">

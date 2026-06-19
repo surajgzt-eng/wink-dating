@@ -53,7 +53,6 @@
 
     async function init() {
       await window.__tgAuth.waitForInitData();
-      window.__tgAuth.persistInitData();
       await Promise.all([loadProfileStats(), loadTexts()]);
     }
 
@@ -81,7 +80,7 @@
         if (!r.ok) return;
         const u = await r.json();
         const el = document.getElementById('textsLeft');
-        el.textContent = u.isPremium ? '∞ (Premium)' : Math.max(0, 10 - (u.textsUsed || 0));
+        el.textContent = u.isPremium ? '∞ (Premium)' : (u.textsRemaining || 0);
         if (u.isPremium) el.classList.add('premium');
       } catch (e) {}
     }
@@ -114,7 +113,7 @@
         document.getElementById('matchBio').textContent = m.bio || '"No bio yet"';
         document.getElementById('matchPremium').style.display = m.isPremium ? 'inline-block' : 'none';
         document.getElementById('openChatBtn').onclick = () => {
-          const link = `chat.html?matchId=${m.chatId}&name=${encodeURIComponent(m.firstName)}${apiURL ? '&api_url=' + encodeURIComponent(apiURL) : ''}`;
+          const link = `chat.html?matchId=${m.matchId}&name=${encodeURIComponent(m.firstName)}${apiURL ? '&api_url=' + encodeURIComponent(apiURL) : ''}`;
           window.location.href = link;
         };
         document.getElementById('nextBtn').onclick = findMatch;

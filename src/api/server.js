@@ -106,7 +106,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     await query(
       `INSERT INTO users (chat_id, first_name, last_name, username, referral_code, is_verified, is_premium, texts_remaining, matches_used, created_at)
-       VALUES ($1, $2, $3, $4, $5, 0, 0, 5, 0, datetime('now'))
+       VALUES ($1, $2, $3, $4, $5, 0, 0, 5, 0, ${db.now()})
        ON CONFLICT (chat_id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, username = excluded.username`,
       [chatId, firstName, lastName || '', username || '', referralCode]
     );
@@ -206,7 +206,7 @@ app.put('/api/profile/:chatId', async (req, res) => {
         city = COALESCE($6, city),
         country = COALESCE($7, country),
         bio = COALESCE($8, bio),
-        updated_at = datetime('now')
+        updated_at = ${db.now()}
        WHERE chat_id = $9`,
       [firstName, lastName, gender, seeking, age, city, country, bio, chatId]
     );
@@ -222,7 +222,7 @@ app.post('/api/profile/:chatId/photo', async (req, res) => {
     const { chatId } = req.params;
     const { photoUrl } = req.body;
     if (!photoUrl) return res.status(400).json({ error: 'Missing photoUrl' });
-    await query('UPDATE users SET photo_url = $1, updated_at = datetime(\'now\') WHERE chat_id = $2', [photoUrl, chatId]);
+    await query(`UPDATE users SET photo_url = $1, updated_at = ${db.now()} WHERE chat_id = $2`, [photoUrl, chatId]);
     res.json({ success: true, photoUrl });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -232,7 +232,19 @@ app.post('/api/profile/:chatId/photo', async (req, res) => {
 // ─── Matching ────────────────────────────────────────────────────
 app.post('/api/matching/find', async (req, res) => {
   try {
-    const { chatId } = req.body;
+    const auth = req.headers.authorization || '';
+    let chatId = req.body.chatId;
+    if (!chatId && auth.startsWith('tma ')) {
+      const initData = auth.slice(4);
+      const params = new URLSearchParams(initData);
+      const userRaw = params.get('user');
+      if (userRaw) {
+        const userData = JSON.parse(userRaw);
+        chatId = userData.id;
+      }
+    }
+    if (!chatId) return res.status(400).json({ error: 'Missing chatId' });
+
     const users = await query('SELECT * FROM users WHERE chat_id = $1', [chatId]);
     if (users.length === 0) return res.status(404).json({ error: 'User not found' });
 
@@ -280,7 +292,7 @@ app.post('/api/matching/find', async (req, res) => {
     const match = matches[0];
 
     await query(
-      `INSERT INTO matches (user1_id, user2_id, status, messages_used, created_at) VALUES ($1, $2, 'active', 0, datetime('now'))`,
+      `INSERT INTO matches (user1_id, user2_id, status, messages_used, created_at) VALUES ($1, $2, 'active', 0, ${db.now()})`,
       [chatId, match.chat_id]
     );
 
@@ -344,7 +356,7 @@ app.post('/api/messages/send', async (req, res) => {
     const user = users[0];
 
     const msgCountResult = await query('SELECT COUNT(*) as count FROM messages WHERE match_id = $1 AND sender_id = $2', [matchId, senderId]);
-    const msgCount = msgCountResult[0].count;
+    const msgCount = parseInt(msgCountResult[0]?.count || 0, 10);
 
     if (!user.is_premium && msgCount >= 10) {
       return res.status(403).json({ error: 'Message limit reached', needsPremium: true, textsRemaining: user.texts_remaining });
@@ -360,11 +372,11 @@ app.post('/api/messages/send', async (req, res) => {
     // Insert message
     await query(
       `INSERT INTO messages (match_id, sender_id, receiver_id, content, media_type, media_url, is_read, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 0, datetime('now'))`,
+       VALUES ($1, $2, $3, $4, $5, $6, 0, ${db.now()})`,
       [matchId, senderId, receiverId, content || '', mediaType || 'text', mediaUrl || null]
     );
 
-    await query('UPDATE matches SET last_message_at = datetime(\'now\') WHERE id = $1', [matchId]);
+    await query(`UPDATE matches SET last_message_at = ${db.now()} WHERE id = $1`, [matchId]);
 
     // Decrement texts if free user (for now, texts = messages allowance)
     if (!user.is_premium && user.texts_remaining > 0) {
@@ -376,7 +388,7 @@ app.post('/api/messages/send', async (req, res) => {
     res.status(201).json({
       success: true,
       textsRemaining: updatedUser[0]?.texts_remaining || 0,
-      messagesUsed: msgCount ? msgCount[0].count + 1 : 1,
+      messagesUsed: msgCount + 1,
       isPremium: Boolean(user.is_premium)
     });
   } catch (error) {
@@ -406,7 +418,7 @@ app.post('/api/premium/subscribe', async (req, res) => {
   try {
     const { chatId } = req.body;
     await query(
-      `UPDATE users SET is_premium = 1, premium_expires = datetime('now', '+365 days'), updated_at = datetime('now') WHERE chat_id = $1`,
+      `UPDATE users SET is_premium = 1, premium_expires = ${db.addDays(365)}, updated_at = ${db.now()} WHERE chat_id = $1`,
       [chatId]
     );
     res.json({

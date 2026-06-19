@@ -1,6 +1,7 @@
 // Telegram Dating Bot — Webhook Handler
 // Processes incoming Telegram updates (messages, callbacks, photos, videos)
 const axios = require('axios');
+const db = require('./db_adapter');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
@@ -93,11 +94,10 @@ function skipKeyboard(callbackData) {
 }
 
 function openChatKeyboard(matchId, matchedName) {
-  const webappBase = getWebappBase();
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '💬 Open Chat', web_app: { url: `${webappBase}/chat.html?matchId=${matchId}&name=${encodeURIComponent(matchedName || '')}` } }],
+        [{ text: '💬 Open Chat', web_app: { url: `${getWebappBase()}/chat.html?matchId=${matchId}&name=${encodeURIComponent(matchedName || '')}` } }],
         [{ text: '❌ Next Match', callback_data: `next_match:${matchId}` }]
       ]
     }
@@ -287,7 +287,7 @@ async function handleStartCommand(chatId, message) {
 
     await query(
       `INSERT INTO users (chat_id, first_name, last_name, username, referral_code, is_verified, is_premium, texts_remaining, matches_used, created_at)
-       VALUES ($1, $2, $3, $4, $5, 0, 0, 5, 0, datetime('now'))
+       VALUES ($1, $2, $3, $4, $5, 0, 0, 5, 0, ${db.now()})
        ON CONFLICT (chat_id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, username = excluded.username`,
       [chatId, firstName, lastName, username, referralCode]
     );
@@ -483,7 +483,7 @@ async function handleFindMatches(chatId, callbackQueryId) {
     // Create match record
     await query(
       `INSERT INTO matches (user1_id, user2_id, status, messages_used, created_at)
-       VALUES ($1, $2, 'active', 0, datetime('now'))`,
+       VALUES ($1, $2, 'active', 0, ${db.now()})`,
       [chatId, match.chat_id]
     );
 
@@ -597,7 +597,7 @@ async function handleSubscribePremium(chatId, callbackQueryId) {
     await answerCallback(callbackQueryId, 'Activating premium...');
 
     await query(
-      `UPDATE users SET is_premium = 1, premium_expires = datetime('now', '+365 days'), updated_at = datetime('now') WHERE chat_id = $1`,
+      `UPDATE users SET is_premium = 1, premium_expires = ${db.addDays(365)}, updated_at = ${db.now()} WHERE chat_id = $1`,
       [chatId]
     );
 
@@ -734,7 +734,7 @@ async function completeVerification(chatId) {
 
   // Auto-activate premium for verified females
   if (isFemale) {
-    await query('UPDATE users SET is_premium = 1, premium_expires = datetime(\'now\', \'+365 days\') WHERE chat_id = $1', [chatId]);
+    await query(`UPDATE users SET is_premium = 1, premium_expires = ${db.addDays(365)} WHERE chat_id = $1`, [chatId]);
     await sendMessage(chatId,
       `✅ <b>Verification Complete!</b> 🎉\n\n` +
       `🌟 <b>Premium Activated!</b>\n\n` +
@@ -973,7 +973,7 @@ async function handleWebhook(update, queryFn) {
 
       if (fileInfo && fileInfo.ok && fileInfo.result) {
         const photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
-        await query('UPDATE users SET photo_url = $1, updated_at = datetime(\'now\') WHERE chat_id = $2', [photoUrl, chatId]);
+        await query(`UPDATE users SET photo_url = $1, updated_at = ${db.now()} WHERE chat_id = $2`, [photoUrl, chatId]);
 
         // Check if in photo step of onboarding
         if (state.step === 'photo') {
@@ -1004,14 +1004,14 @@ async function handleWebhook(update, queryFn) {
           const selfieUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.result.file_path}`;
           const photoUrl = state.photoUrl;
 
-          await query('UPDATE users SET selfie_url = $1, updated_at = datetime(\'now\') WHERE chat_id = $2', [selfieUrl, chatId]);
+          await query(`UPDATE users SET selfie_url = $1, updated_at = ${db.now()} WHERE chat_id = $2`, [selfieUrl, chatId]);
 
           // Compare faces
           const similarity = await compareFaces(photoUrl, selfieUrl);
 
           if (similarity >= 0.65) {
             // Verified!
-            await query('UPDATE users SET is_verified = 1, updated_at = datetime(\'now\') WHERE chat_id = $1', [chatId]);
+            await query(`UPDATE users SET is_verified = 1, updated_at = ${db.now()} WHERE chat_id = $1`, [chatId]);
 
             // Award referral reward if applicable
             await awardReferralReward(chatId);

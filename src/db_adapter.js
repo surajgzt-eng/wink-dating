@@ -354,6 +354,14 @@ async function setCache(key, value, ttl = 3600) {
   }
 }
 
+function now() {
+  return isPostgres ? 'CURRENT_TIMESTAMP' : "datetime('now')";
+}
+
+function addDays(days) {
+  return isPostgres ? `CURRENT_TIMESTAMP + INTERVAL '${days} days'` : `datetime('now', '+${days} days')`;
+}
+
 module.exports = {
   initializeDatabase,
   initializeDatabaseFromPool,
@@ -364,5 +372,7 @@ module.exports = {
   createTables,
   seedDatabase,
   isPostgres: () => isPostgres,
-  getDb: () => db
+  getDb: () => db,
+  now,
+  addDays
 };
