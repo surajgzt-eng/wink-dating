@@ -1103,7 +1103,7 @@ function setupWebhook(app, queryFn) {
       const result = await tg('setWebhook', { url: `${url}/webhook` });
 
       const menuResult = await tg('setChatMenuButton', {
-        menu_button: JSON.stringify({ type: 'commands' })
+        menu_button: { type: 'web_app', text: 'Open WINK', web_app: { url: process.env.RENDER_EXTERNAL_URL || process.env.WEBAPP_URL || 'http://localhost:3000' } }
       });
 
       const commandsResult = await tg('setMyCommands', {
