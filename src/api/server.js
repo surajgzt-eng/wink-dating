@@ -61,6 +61,17 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
+// ─── Debug ────────────────────────────────────────────────────────
+app.get('/debug', (req, res) => {
+  res.json({
+    renderExternalUrl: process.env.RENDER_EXTERNAL_URL || '(not set)',
+    webappUrl: process.env.WEBAPP_URL || '(not set)',
+    nodeEnv: process.env.NODE_ENV,
+    botUsername: process.env.BOT_USERNAME || '(not set)',
+    hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN
+  });
+});
+
 // ─── Health ───────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   try {
